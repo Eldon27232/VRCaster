@@ -1,0 +1,47 @@
+// 全局状态：队列、设置、服务器配置。
+import { writable } from "svelte/store";
+import type {
+  QueueItem,
+  AppSettings,
+  ServerProfile,
+  QueueMode,
+} from "./types";
+
+export const queue = writable<QueueItem[]>([]);
+
+export const settings = writable<AppSettings>({
+  language: "zh",
+  defaultResolution: "p1440",
+  defaultSpeed: "medium",
+  defaultTonemap: "hable",
+  defaultAudioBitrateK: 192,
+  defaultQueueMode: "pipeline",
+  activeProfileId: null,
+});
+
+export const profiles = writable<ServerProfile[]>([]);
+export const activeProfileId = writable<string | null>(null);
+export const queueMode = writable<QueueMode>("pipeline");
+
+// 队列操作辅助
+export function updateItem(id: string, patch: Partial<QueueItem>) {
+  queue.update((items) =>
+    items.map((it) => (it.id === id ? { ...it, ...patch } : it)),
+  );
+}
+
+export function removeItem(id: string) {
+  queue.update((items) => items.filter((it) => it.id !== id));
+}
+
+export function moveItem(id: string, dir: -1 | 1) {
+  queue.update((items) => {
+    const i = items.findIndex((it) => it.id === id);
+    if (i < 0) return items;
+    const j = i + dir;
+    if (j < 0 || j >= items.length) return items;
+    const next = items.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
+}

@@ -1,0 +1,64 @@
+:root {
+  color-scheme: dark;
+
+  /* 调色板：深色 + 紫青点缀 */
+  --bg-0: #0b0b10;
+  --bg-1: #14141c;
+  --bg-2: #1c1c28;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #e8e8ef;
+  --text-dim: #9a9aa8;
+  --accent-purple: #7c3aed;
+  --accent-cyan: #06b6d4;
+  --accent-grad: linear-gradient(135deg, #7c3aed, #06b6d4);
+  --danger: #ef4444;
+  --success: #4ade80;
+
+  font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(124, 58, 237, 0.18), transparent 60%),
+    radial-gradient(1000px 500px at 110% 10%, rgba(6, 182, 212, 0.14), transparent 55%),
+    var(--bg-0);
+  background-attachment: fixed;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
