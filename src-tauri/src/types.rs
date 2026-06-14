@@ -244,14 +244,26 @@ impl Default for AppSettings {
 
 // ---- 事件载荷 ----
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProgressEvent {
     pub item_id: String,
-    pub stage: String, // "encode" | "upload"
+    pub stage: String, // "encode" | "upload" | "analyze" | "download"
     pub percent: f32,
     pub speed: String,
     pub eta_secs: Option<f64>,
+    // 编码详情（ffmpeg -progress 字段映射）
+    pub frame: Option<u64>,
+    pub total_frames: Option<u64>,
+    pub fps: Option<f64>,
+    pub bitrate: Option<String>,
+    pub q: Option<f64>,
+    pub out_time_secs: Option<f64>,
+    pub total_secs: Option<f64>,
+    pub cur_size: Option<u64>,
+    // 上传详情
+    pub transferred: Option<u64>,
+    pub total_size: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]

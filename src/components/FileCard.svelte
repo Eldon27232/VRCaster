@@ -2,11 +2,11 @@
   import { open as openShell } from "@tauri-apps/plugin-shell";
   import { t } from "../lib/i18n";
   import { api } from "../lib/api";
-  import { updateItem, removeItem, moveItem } from "../lib/stores";
+  import { updateItem, removeItem, moveItem, progressMap } from "../lib/stores";
   import type { QueueItem, EncodeParams } from "../lib/types";
   import ParamControls from "./ParamControls.svelte";
   import SamplePanel from "./SamplePanel.svelte";
-  import ProgressBar from "./ProgressBar.svelte";
+  import ProgressDetail from "./ProgressDetail.svelte";
 
   export let item: QueueItem;
 
@@ -158,16 +158,16 @@
 
   <!-- 进度（压制 / 上传）-->
   {#if item.status === "encoding"}
-    <ProgressBar
-      percent={item.encodeProgress}
+    <ProgressDetail
+      event={$progressMap[item.id]}
       label={$t("encoding")}
-      active={true}
+      percent={item.encodeProgress}
     />
   {:else if item.status === "uploading"}
-    <ProgressBar
-      percent={item.uploadProgress}
+    <ProgressDetail
+      event={$progressMap[item.id]}
       label={$t("uploading")}
-      active={true}
+      percent={item.uploadProgress}
     />
   {/if}
 

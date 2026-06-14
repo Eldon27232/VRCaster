@@ -5,9 +5,17 @@ import type {
   AppSettings,
   ServerProfile,
   QueueMode,
+  ProgressEvent,
 } from "./types";
 
 export const queue = writable<QueueItem[]>([]);
+
+// 每个 item 最新一帧的详细进度（ffmpeg/上传字段），按 itemId 索引。
+export const progressMap = writable<Record<string, ProgressEvent>>({});
+
+export function setProgress(e: ProgressEvent) {
+  progressMap.update((m) => ({ ...m, [e.itemId]: e }));
+}
 
 export const settings = writable<AppSettings>({
   language: "zh",

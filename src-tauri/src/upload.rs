@@ -154,6 +154,9 @@ pub async fn run_upload(
                 percent,
                 speed,
                 eta_secs: eta,
+                transferred: Some(sent),
+                total_size: Some(total),
+                ..Default::default()
             },
         );
     };

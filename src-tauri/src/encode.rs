@@ -215,6 +215,11 @@ fn escape_subtitle_path(path: &str) -> String {
 struct ProgressState {
     out_time_secs: f64,
     speed: String,
+    frame: Option<u64>,
+    fps: Option<f64>,
+    bitrate: Option<String>,
+    q: Option<f64>,
+    total_size: Option<u64>,
 }
 
 impl ProgressState {
@@ -222,6 +227,11 @@ impl ProgressState {
         ProgressState {
             out_time_secs: 0.0,
             speed: String::new(),
+            frame: None,
+            fps: None,
+            bitrate: None,
+            q: None,
+            total_size: None,
         }
     }
 
@@ -249,6 +259,24 @@ impl ProgressState {
             "speed" => {
                 // 形如 "1.23x"
                 self.speed = value.trim().to_string();
+            }
+            "frame" => {
+                self.frame = value.trim().parse().ok();
+            }
+            "fps" => {
+                self.fps = value.trim().parse().ok();
+            }
+            "bitrate" => {
+                let v = value.trim();
+                if !v.is_empty() && v != "N/A" {
+                    self.bitrate = Some(v.to_string());
+                }
+            }
+            "total_size" => {
+                self.total_size = value.trim().parse().ok();
+            }
+            "stream_0_0_q" => {
+                self.q = value.trim().parse().ok();
             }
             "progress" => {
                 // value 为 "continue" 或 "end"，两者都代表本组进度刷新结束。
@@ -280,6 +308,15 @@ fn parse_speed(speed: &str) -> Option<f64> {
     }
 }
 
+/// 估算总帧数（fps × 时长），供进度显示帧计数（frame / total）。
+fn est_total_frames(fps: f64, duration_secs: f64) -> Option<u64> {
+    if fps > 0.0 && duration_secs > 0.0 {
+        Some((fps * duration_secs).round() as u64)
+    } else {
+        None
+    }
+}
+
 /// 运行一次 ffmpeg 编码，解析 -progress 并上报进度。
 ///
 /// `total_duration` 为进度百分比的分母（全片用 media.duration_secs，样片用 spec.duration_secs）。
@@ -290,6 +327,7 @@ async fn spawn_and_track(
     args: &[String],
     work_dir: &Path,
     total_duration: f64,
+    total_frames: Option<u64>,
 ) -> Result<(), String> {
     let mut cmd = Command::new(ffmpeg_exe);
     cmd.args(args)
@@ -369,6 +407,15 @@ async fn spawn_and_track(
                         percent,
                         speed: state.speed.clone(),
                         eta_secs,
+                        frame: state.frame,
+                        total_frames,
+                        fps: state.fps,
+                        bitrate: state.bitrate.clone(),
+                        q: state.q,
+                        out_time_secs: Some(state.out_time_secs),
+                        total_secs: Some(total_duration),
+                        cur_size: state.total_size,
+                        ..Default::default()
                     },
                 );
             }
@@ -404,6 +451,15 @@ async fn spawn_and_track(
                 percent: 100.0,
                 speed: state.speed.clone(),
                 eta_secs: Some(0.0),
+                frame: state.frame,
+                total_frames,
+                fps: state.fps,
+                bitrate: state.bitrate.clone(),
+                q: state.q,
+                out_time_secs: Some(state.out_time_secs),
+                total_secs: Some(total_duration),
+                cur_size: state.total_size,
+                ..Default::default()
             },
         );
     }
@@ -437,6 +493,7 @@ pub async fn run_encode(
         &args,
         &work_dir,
         media.duration_secs,
+        est_total_frames(media.fps, media.duration_secs),
     )
     .await
 }
@@ -543,6 +600,7 @@ pub async fn encode_sample(
         &args,
         &work_dir,
         spec.duration_secs,
+        est_total_frames(media.fps, spec.duration_secs),
     )
     .await?;
     let elapsed_secs = started.elapsed().as_secs_f64();

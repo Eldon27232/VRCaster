@@ -135,10 +135,22 @@ export interface AppSettings {
 // 事件载荷
 export interface ProgressEvent {
   itemId: string;
-  stage: "encode" | "upload";
+  stage: "encode" | "upload" | "analyze" | "download";
   percent: number;
   speed: string;
   etaSecs: number | null;
+  // 编码详情（ffmpeg -progress 映射）
+  frame?: number | null;
+  totalFrames?: number | null;
+  fps?: number | null;
+  bitrate?: string | null;
+  q?: number | null;
+  outTimeSecs?: number | null;
+  totalSecs?: number | null;
+  curSize?: number | null;
+  // 上传详情
+  transferred?: number | null;
+  totalSize?: number | null;
 }
 
 export interface LogEvent {

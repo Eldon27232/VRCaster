@@ -45,6 +45,15 @@ export const dict: Dict = {
   uploading: { zh: "上传中", en: "Uploading" },
   done: { zh: "完成", en: "Done" },
   error: { zh: "出错", en: "Error" },
+  frame: { zh: "帧", en: "Frame" },
+  fpsLabel: { zh: "FPS", en: "FPS" },
+  speedLabel: { zh: "速度", en: "Speed" },
+  bitrateLabel: { zh: "码率", en: "Bitrate" },
+  encoded: { zh: "已编码", en: "Encoded" },
+  output: { zh: "输出", en: "Output" },
+  remaining: { zh: "剩余", en: "ETA" },
+  qualityQ: { zh: "质量 q", en: "Quality q" },
+  sent: { zh: "已传", en: "Sent" },
 };
 
 export const t = derived(lang, ($lang) => (key: string) => {

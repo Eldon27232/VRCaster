@@ -5,7 +5,7 @@
   import SettingsView from "./views/SettingsView.svelte";
   import Segmented from "./components/Segmented.svelte";
   import { api, events } from "./lib/api";
-  import { settings, queueMode, activeProfileId, updateItem } from "./lib/stores";
+  import { settings, queueMode, activeProfileId, updateItem, setProgress } from "./lib/stores";
   import { lang, setLang, tr } from "./lib/i18n";
   import type { Lang } from "./lib/i18n";
   import type { ProgressEvent } from "./lib/types";
@@ -25,6 +25,7 @@
 
   // progress 事件 → 更新对应 item 的进度与状态
   function applyProgress(e: ProgressEvent) {
+    setProgress(e);
     if (e.stage === "encode") {
       updateItem(e.itemId, {
         encodeProgress: e.percent,
