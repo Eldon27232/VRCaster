@@ -15,11 +15,19 @@ pub async fn ensure(app: &AppHandle) -> Result<FfmpegPaths, String> {
     let ffmpeg_exe = ffmpeg_dir.join("ffmpeg.exe");
     let ffprobe_exe = ffmpeg_dir.join("ffprobe.exe");
 
-    // 1) 已存在则直接返回。
+    // 1) 已下载到 app data → 直接返回。
     if ffmpeg_exe.is_file() && ffprobe_exe.is_file() {
         return Ok(FfmpegPaths {
             ffmpeg: ffmpeg_exe.to_string_lossy().into_owned(),
             ffprobe: ffprobe_exe.to_string_lossy().into_owned(),
+        });
+    }
+
+    // 2) 系统 PATH 已装 ffmpeg/ffprobe → 直接用，免下载（国内下载源不可靠）。
+    if let (Some(fm), Some(fp)) = (find_in_path("ffmpeg"), find_in_path("ffprobe")) {
+        return Ok(FfmpegPaths {
+            ffmpeg: fm,
+            ffprobe: fp,
         });
     }
 
@@ -107,6 +115,27 @@ pub async fn ensure(app: &AppHandle) -> Result<FfmpegPaths, String> {
         ffmpeg: ffmpeg_exe.to_string_lossy().into_owned(),
         ffprobe: ffprobe_exe.to_string_lossy().into_owned(),
     })
+}
+
+/// 在系统 PATH 中查找可执行文件（Windows `where`），返回首个绝对路径。
+fn find_in_path(name: &str) -> Option<String> {
+    use std::process::Command;
+    let mut cmd = Command::new("where");
+    cmd.arg(name);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty())
+        .map(|s| s.to_string())
 }
 
 /// 从 zip 中提取 bin/ffmpeg.exe 与 bin/ffprobe.exe 到目标目录（扁平化，去掉路径前缀）。
