@@ -25,6 +25,7 @@ export const settings = writable<AppSettings>({
   defaultAudioBitrateK: 192,
   defaultQueueMode: "pipeline",
   activeProfileId: null,
+  autoDeleteSample: true,
 });
 
 export const profiles = writable<ServerProfile[]>([]);

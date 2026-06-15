@@ -85,6 +85,14 @@
     }
   }
 
+  async function stopSample() {
+    try {
+      await api.cancelEncode(SAMPLE_KEY);
+    } catch {
+      /* 静默：停止失败不阻断 UI */
+    }
+  }
+
   function applySuggested() {
     if (result?.fullEstimate.suggested) {
       dispatch("applyParams", result.fullEstimate.suggested);
@@ -165,6 +173,9 @@
 
   {#if loading}
     <ProgressDetail event={$progressMap[SAMPLE_KEY]} label="压制样片中" percent={0} />
+    <div class="sample-controls">
+      <button class="btn-outline danger" on:click={stopSample}>停止</button>
+    </div>
   {/if}
 
   {#if errorMsg}
@@ -341,6 +352,33 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  .sample-controls {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 9px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .btn-outline:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent-cyan);
+  }
+  .btn-outline.danger {
+    color: var(--danger);
+  }
+  .btn-outline.danger:hover {
+    border-color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
   }
 
   .error {

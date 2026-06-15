@@ -130,6 +130,7 @@ export interface AppSettings {
   defaultAudioBitrateK: number;
   defaultQueueMode: QueueMode;
   activeProfileId: string | null;
+  autoDeleteSample: boolean;
 }
 
 // 事件载荷

@@ -29,6 +29,9 @@ export const api = {
     invoke<string>("start_upload", { itemId, localPath, profileId }),
   runQueue: (items: QueueItem[], mode: QueueMode, profileId: string) =>
     invoke<void>("run_queue", { items, mode, profileId }),
+  cancelEncode: (itemId: string) => invoke<void>("cancel_encode", { itemId }),
+  pauseEncode: (itemId: string) => invoke<void>("pause_encode", { itemId }),
+  resumeEncode: (itemId: string) => invoke<void>("resume_encode", { itemId }),
 
   listProfiles: () => invoke<ServerProfile[]>("list_profiles"),
   saveProfile: (profile: ServerProfile, secret: string | null) =>

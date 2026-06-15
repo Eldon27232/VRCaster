@@ -17,11 +17,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .manage(crate::encode::ProcRegistry::default())
         .invoke_handler(tauri::generate_handler![
             media::analyze_media,
             media::default_sample_spec,
             encode::encode_sample,
             encode::start_encode,
+            encode::cancel_encode,
+            encode::pause_encode,
+            encode::resume_encode,
             upload::start_upload,
             upload::check_remote_space,
             queue::run_queue,

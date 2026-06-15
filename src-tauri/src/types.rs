@@ -226,6 +226,9 @@ pub struct AppSettings {
     pub default_audio_bitrate_k: u32,
     pub default_queue_mode: QueueMode,
     pub active_profile_id: Option<String>,
+    /// 样片压完后自动删除样片输出文件。兼容旧 settings.json：缺字段时按 default()=true 回填。
+    #[serde(default)]
+    pub auto_delete_sample: bool,
 }
 
 impl Default for AppSettings {
@@ -238,6 +241,7 @@ impl Default for AppSettings {
             default_audio_bitrate_k: 192,
             default_queue_mode: QueueMode::Pipeline,
             active_profile_id: None,
+            auto_delete_sample: true,
         }
     }
 }

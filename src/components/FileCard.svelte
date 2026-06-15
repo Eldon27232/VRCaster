@@ -57,6 +57,36 @@
     }
   }
 
+  // —— 压制控制：停止 / 暂停 / 继续 ——
+  let paused = false;
+
+  // item 切出 encoding 时把 paused 复位。
+  $: if (item.status !== "encoding" && paused) {
+    paused = false;
+  }
+
+  async function stopEncode() {
+    try {
+      await api.cancelEncode(item.id);
+    } catch {
+      /* 静默：停止失败不阻断 UI */
+    }
+  }
+
+  async function togglePause() {
+    try {
+      if (paused) {
+        await api.resumeEncode(item.id);
+        paused = false;
+      } else {
+        await api.pauseEncode(item.id);
+        paused = true;
+      }
+    } catch {
+      /* 静默：暂停/继续失败保持当前状态 */
+    }
+  }
+
   // —— 完成态 ——
   let copied = false;
   async function copyUrl() {
@@ -163,6 +193,12 @@
       label={$t("encoding")}
       percent={item.encodeProgress}
     />
+    <div class="encode-controls">
+      <button class="btn-outline" on:click={togglePause}>
+        {paused ? "继续" : "暂停"}
+      </button>
+      <button class="btn-outline danger" on:click={stopEncode}>停止</button>
+    </div>
   {:else if item.status === "uploading"}
     <ProgressDetail
       event={$progressMap[item.id]}
@@ -366,6 +402,36 @@
     white-space: pre-wrap;
     max-height: 160px;
     overflow: auto;
+  }
+
+  .encode-controls {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 9px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+  .btn-outline:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent-cyan);
+  }
+  .btn-outline.danger {
+    color: var(--danger);
+  }
+  .btn-outline.danger:hover {
+    border-color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
   }
 
   .actions {

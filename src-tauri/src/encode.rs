@@ -7,14 +7,103 @@ use crate::types::{
     EncodeParams, FfmpegPaths, FullEstimate, MediaInfo, ProgressEvent, RateMode, SampleResult,
     SampleSpec, SubtitleChoice,
 };
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tauri::{AppHandle, Emitter};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// 进程注册表：item_id -> 正在运行的 ffmpeg 进程条目，由 lib.rs `.manage()` 托管。
+#[derive(Default)]
+pub struct ProcRegistry(pub Mutex<HashMap<String, ProcEntry>>);
+
+/// 单个在跑进程的句柄信息。`cancelled` 由 cancel_encode 置位，供 wait 后区分“取消”与“真失败”。
+pub struct ProcEntry {
+    pub pid: u32,
+    pub cancelled: bool,
+}
+
+/// 强杀进程树（含 ffmpeg 派生的子进程）：taskkill /F /T。Windows 隐藏黑窗。
+fn kill_pid(pid: u32) -> Result<(), String> {
+    let mut cmd = std::process::Command::new("taskkill");
+    cmd.args(["/F", "/T", "/PID", &pid.to_string()]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let status = cmd
+        .status()
+        .map_err(|e| format!("执行 taskkill 失败: {}", e))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "taskkill 退出码 {}",
+            status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "未知".into())
+        ))
+    }
+}
+
+/// Windows 进程暂停/继续：NtSuspendProcess / NtResumeProcess。
+#[cfg(windows)]
+mod winproc {
+    use std::ffi::c_void;
+    type Handle = *mut c_void;
+    const PROCESS_SUSPEND_RESUME: u32 = 0x0800;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(a: u32, i: i32, p: u32) -> Handle;
+        fn CloseHandle(h: Handle) -> i32;
+    }
+    #[link(name = "ntdll")]
+    extern "system" {
+        fn NtSuspendProcess(h: Handle) -> i32;
+        fn NtResumeProcess(h: Handle) -> i32;
+    }
+    fn op(pid: u32, suspend: bool) -> Result<(), String> {
+        unsafe {
+            let h = OpenProcess(PROCESS_SUSPEND_RESUME, 0, pid);
+            if h.is_null() {
+                return Err("OpenProcess 失败".into());
+            }
+            let r = if suspend {
+                NtSuspendProcess(h)
+            } else {
+                NtResumeProcess(h)
+            };
+            CloseHandle(h);
+            if r < 0 {
+                return Err(format!("挂起/恢复失败,状态码 {r}"));
+            }
+            Ok(())
+        }
+    }
+    pub fn suspend(pid: u32) -> Result<(), String> {
+        op(pid, true)
+    }
+    pub fn resume(pid: u32) -> Result<(), String> {
+        op(pid, false)
+    }
+}
+
+#[cfg(not(windows))]
+mod winproc {
+    pub fn suspend(_: u32) -> Result<(), String> {
+        Err("当前平台不支持暂停".into())
+    }
+    pub fn resume(_: u32) -> Result<(), String> {
+        Err("当前平台不支持继续".into())
+    }
+}
 
 /// 给 tokio::process::Command 套上 Windows 隐藏黑窗标志（其他平台 no-op）。
 fn hide_window(cmd: &mut Command) {
@@ -341,6 +430,20 @@ async fn spawn_and_track(
         .spawn()
         .map_err(|e| format!("启动 ffmpeg 失败: {}", e))?;
 
+    // 取 pid 并注册到进程表，供 cancel/pause/resume 命令按 item_id 查找。
+    if let (Some(app), Some(pid)) = (app, child.id()) {
+        let registry: &ProcRegistry = app.state::<ProcRegistry>().inner();
+        if let Ok(mut map) = registry.0.lock() {
+            map.insert(
+                item_id.to_string(),
+                ProcEntry {
+                    pid,
+                    cancelled: false,
+                },
+            );
+        }
+    }
+
     let stdout = child
         .stdout
         .take()
@@ -429,7 +532,24 @@ async fn spawn_and_track(
 
     let stderr_tail = stderr_handle.await.unwrap_or_default();
 
+    // 取出取消标志并从注册表移除本条目（无论成败都要清理）。
+    let cancelled = if let Some(app) = app {
+        let registry: &ProcRegistry = app.state::<ProcRegistry>().inner();
+        registry
+            .0
+            .lock()
+            .ok()
+            .and_then(|mut map| map.remove(item_id))
+            .map(|e| e.cancelled)
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
     if !status.success() {
+        if cancelled {
+            return Err("已取消".to_string());
+        }
         let code = status
             .code()
             .map(|c| c.to_string())
@@ -498,7 +618,7 @@ pub async fn run_encode(
     .await
 }
 
-/// 由 media 路径与 params 推导成品输出路径：媒体同目录下 `<stem>_vrc.mp4`。
+/// 由 media 路径与 params 推导成品输出路径：媒体父目录下 `outs/<stem>_vrc.mp4`。
 fn derive_out_path(media: &MediaInfo) -> Result<String, String> {
     let src = Path::new(&media.path);
     let stem = src
@@ -511,7 +631,8 @@ fn derive_out_path(media: &MediaInfo) -> Result<String, String> {
         .filter(|p| !p.as_os_str().is_empty())
         .map(|p| p.to_path_buf())
         .unwrap_or_else(crate::config::data_dir);
-    let out = dir.join(format!("{}_vrc.mp4", stem));
+    // 成品收纳到媒体父目录的 outs/ 子目录，避免污染原始媒体目录。
+    let out = dir.join("outs").join(format!("{}_vrc.mp4", stem));
     Ok(out.to_string_lossy().to_string())
 }
 
@@ -540,10 +661,10 @@ pub async fn start_encode(
     let ff = ffmpeg::ensure(&app).await?;
     let out_path = derive_out_path(&media)?;
 
-    // 确保输出目录存在。
-    if let Some(parent) = Path::new(&out_path).parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("创建输出目录失败: {}", e))?;
+    // 确保 outs/ 输出目录存在（out_path 的父目录即为 outs/）。
+    if let Some(outs_dir) = Path::new(&out_path).parent() {
+        if !outs_dir.as_os_str().is_empty() {
+            std::fs::create_dir_all(outs_dir).map_err(|e| format!("创建输出目录失败: {}", e))?;
         }
     }
 
@@ -627,6 +748,14 @@ pub async fn encode_sample(
         suggested: build_suggested(&params),
     };
 
+    // 若设置开启则压完即删样片文件（忽略删除错误）；output_path 仍按原值返回，
+    // 前端预览在文件缺失时会自动 fallback。
+    if let Ok(settings) = crate::config::get_settings() {
+        if settings.auto_delete_sample {
+            let _ = std::fs::remove_file(&sample_out);
+        }
+    }
+
     Ok(SampleResult {
         output_path: sample_out_str,
         size_bytes,
@@ -634,4 +763,49 @@ pub async fn encode_sample(
         elapsed_secs,
         full_estimate,
     })
+}
+
+/// #[tauri::command] 取消编码：置 cancelled 标志并取出 pid，再强杀进程树。
+/// 找不到条目（已结束/未注册）也返回 Ok。
+#[tauri::command]
+pub fn cancel_encode(app: AppHandle, item_id: String) -> Result<(), String> {
+    let registry: &ProcRegistry = app.state::<ProcRegistry>().inner();
+    let pid = {
+        let mut map = registry
+            .0
+            .lock()
+            .map_err(|_| "进程表锁中毒".to_string())?;
+        match map.get_mut(&item_id) {
+            Some(entry) => {
+                entry.cancelled = true;
+                Some(entry.pid)
+            }
+            None => None,
+        }
+    };
+    match pid {
+        Some(pid) => kill_pid(pid),
+        None => Ok(()),
+    }
+}
+
+/// #[tauri::command] 暂停编码：按 item_id 查 pid，挂起进程。
+#[tauri::command]
+pub fn pause_encode(app: AppHandle, item_id: String) -> Result<(), String> {
+    let pid = lookup_pid(&app, &item_id).ok_or_else(|| "未找到运行中的任务".to_string())?;
+    winproc::suspend(pid)
+}
+
+/// #[tauri::command] 继续编码：按 item_id 查 pid，恢复进程。
+#[tauri::command]
+pub fn resume_encode(app: AppHandle, item_id: String) -> Result<(), String> {
+    let pid = lookup_pid(&app, &item_id).ok_or_else(|| "未找到运行中的任务".to_string())?;
+    winproc::resume(pid)
+}
+
+/// 从进程表按 item_id 取 pid（不存在返回 None）。
+fn lookup_pid(app: &AppHandle, item_id: &str) -> Option<u32> {
+    let registry: &ProcRegistry = app.state::<ProcRegistry>().inner();
+    let map = registry.0.lock().ok()?;
+    map.get(item_id).map(|e| e.pid)
 }

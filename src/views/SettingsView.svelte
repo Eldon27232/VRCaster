@@ -75,6 +75,11 @@
     applySettings({ language: v });
   }
 
+  function onAutoDeleteSample(e: Event) {
+    const checked = (e.currentTarget as HTMLInputElement).checked;
+    applySettings({ autoDeleteSample: checked });
+  }
+
   function onSelect<K extends keyof AppSettings>(key: K) {
     return (e: Event) => {
       const raw = (e.currentTarget as HTMLSelectElement).value;
@@ -218,6 +223,18 @@
           </select>
         </label>
       </div>
+
+      <label class="toggle-field">
+        <input
+          type="checkbox"
+          checked={$settings.autoDeleteSample}
+          on:change={onAutoDeleteSample}
+        />
+        <span class="toggle-text">
+          <span class="toggle-title">自动删除样片</span>
+          <span class="toggle-desc">压完样片并算出外推后自动删除样片文件</span>
+        </span>
+      </label>
     </section>
 
     <!-- 服务器配置 -->
@@ -327,6 +344,34 @@
   }
   select:focus {
     border-color: var(--accent-purple);
+  }
+  .toggle-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 16px;
+    cursor: pointer;
+  }
+  .toggle-field input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    flex: none;
+    accent-color: var(--accent-purple);
+    cursor: pointer;
+  }
+  .toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .toggle-title {
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+  .toggle-desc {
+    font-size: 0.78rem;
+    color: var(--text-dim);
   }
   .muted {
     color: var(--text-dim);
