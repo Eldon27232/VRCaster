@@ -3,12 +3,17 @@
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { api } from "../lib/api";
   import { t } from "../lib/i18n";
+  import { progressMap } from "../lib/stores";
+  import ProgressDetail from "./ProgressDetail.svelte";
   import type {
     MediaInfo,
     EncodeParams,
     SampleSpec,
     SampleResult,
   } from "../lib/types";
+
+  // 样片进度用固定 key "__sample__"（后端 encode_sample 上报的 item_id）。
+  const SAMPLE_KEY = "__sample__";
 
   export let media: MediaInfo;
   export let params: EncodeParams;
@@ -59,6 +64,12 @@
     result = null;
     previewSrc = null;
     previewFailed = false;
+    // 清掉上次样片进度残留，避免开头闪现旧的 100%。
+    progressMap.update((m) => {
+      const n = { ...m };
+      delete n[SAMPLE_KEY];
+      return n;
+    });
     const spec: SampleSpec = { startSecs, durationSecs };
     try {
       result = await api.encodeSample(media, params, spec);
@@ -151,6 +162,10 @@
       {$t("encodeSample")}
     {/if}
   </button>
+
+  {#if loading}
+    <ProgressDetail event={$progressMap[SAMPLE_KEY]} label="压制样片中" percent={0} />
+  {/if}
 
   {#if errorMsg}
     <div class="error" role="alert">{errorMsg}</div>
