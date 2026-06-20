@@ -284,3 +284,25 @@ pub struct DownloadEvent {
     pub percent: f32,
     pub message: String,
 }
+
+// ---- 历史记录 / 参数预设 ----
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryEntry {
+    pub id: String,
+    pub file_name: String,
+    pub output_path: String,
+    pub url: String,
+    pub size_bytes: u64,
+    pub created_at: String, // 由前端传入的本地时间字符串
+    pub profile_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Preset {
+    pub id: String,
+    pub name: String,
+    pub params: EncodeParams,
+}

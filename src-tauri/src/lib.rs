@@ -6,7 +6,9 @@ pub mod types;
 pub mod config;
 pub mod encode;
 pub mod ffmpeg;
+pub mod history;
 pub mod media;
+pub mod preset;
 pub mod queue;
 pub mod server;
 pub mod subtitle;
@@ -39,6 +41,14 @@ pub fn run() {
             config::import_config,
             server::deploy_nginx,
             ffmpeg::ensure_ffmpeg,
+            media::list_videos_in_dir,
+            history::list_history,
+            history::add_history,
+            history::delete_history,
+            history::clear_history,
+            preset::list_presets,
+            preset::save_preset,
+            preset::delete_preset,
         ])
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用出错");

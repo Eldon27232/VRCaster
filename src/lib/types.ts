@@ -164,3 +164,19 @@ export interface DownloadEvent {
   percent: number;
   message: string;
 }
+
+export interface HistoryEntry {
+  id: string;
+  fileName: string;
+  outputPath: string;
+  url: string;
+  sizeBytes: number;
+  createdAt: string;
+  profileName: string;
+}
+
+export interface Preset {
+  id: string;
+  name: string;
+  params: EncodeParams;
+}

@@ -15,6 +15,8 @@ import type {
   ProgressEvent,
   LogEvent,
   DownloadEvent,
+  HistoryEntry,
+  Preset,
 } from "./types";
 
 export const api = {
@@ -49,6 +51,16 @@ export const api = {
     invoke<void>("set_settings", { settings }),
   exportConfig: (path: string) => invoke<void>("export_config", { path }),
   importConfig: (path: string) => invoke<void>("import_config", { path }),
+
+  listVideosInDir: (path: string) =>
+    invoke<string[]>("list_videos_in_dir", { path }),
+  listHistory: () => invoke<HistoryEntry[]>("list_history"),
+  addHistory: (entry: HistoryEntry) => invoke<void>("add_history", { entry }),
+  deleteHistory: (id: string) => invoke<void>("delete_history", { id }),
+  clearHistory: () => invoke<void>("clear_history"),
+  listPresets: () => invoke<Preset[]>("list_presets"),
+  savePreset: (preset: Preset) => invoke<void>("save_preset", { preset }),
+  deletePreset: (id: string) => invoke<void>("delete_preset", { id }),
 };
 
 // 事件订阅

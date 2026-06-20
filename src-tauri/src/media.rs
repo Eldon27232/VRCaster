@@ -201,3 +201,25 @@ pub fn default_sample_spec(duration_secs: f64) -> SampleSpec {
         duration_secs: dur,
     }
 }
+
+/// 列出目录下的视频文件（一级，不递归），按文件名排序。供"拖入文件夹批量"使用。
+#[tauri::command]
+pub fn list_videos_in_dir(path: String) -> Result<Vec<String>, String> {
+    const EXTS: &[&str] = &[
+        "mkv", "mp4", "avi", "mov", "webm", "ts", "m4v", "flv", "wmv", "mpg", "mpeg", "m2ts",
+    ];
+    let mut out: Vec<String> = Vec::new();
+    let entries = std::fs::read_dir(&path).map_err(|e| format!("读取目录失败: {e}"))?;
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.is_file() {
+            if let Some(ext) = p.extension().and_then(|s| s.to_str()) {
+                if EXTS.contains(&ext.to_lowercase().as_str()) {
+                    out.push(p.to_string_lossy().into_owned());
+                }
+            }
+        }
+    }
+    out.sort();
+    Ok(out)
+}

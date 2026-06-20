@@ -6,6 +6,9 @@ import type {
   ServerProfile,
   QueueMode,
   ProgressEvent,
+  LogEvent,
+  HistoryEntry,
+  Preset,
 } from "./types";
 
 export const queue = writable<QueueItem[]>([]);
@@ -16,6 +19,22 @@ export const progressMap = writable<Record<string, ProgressEvent>>({});
 export function setProgress(e: ProgressEvent) {
   progressMap.update((m) => ({ ...m, [e.itemId]: e }));
 }
+
+// 日志：压制/上传/队列的 log 事件累积（上限 500 条）。
+export const logs = writable<LogEvent[]>([]);
+export function pushLog(e: LogEvent) {
+  logs.update((l) => {
+    const n = [...l, e];
+    return n.length > 500 ? n.slice(-500) : n;
+  });
+}
+export function clearLogs() {
+  logs.set([]);
+}
+
+// 历史记录 / 参数预设（从后端加载后缓存）。
+export const history = writable<HistoryEntry[]>([]);
+export const presets = writable<Preset[]>([]);
 
 export const settings = writable<AppSettings>({
   language: "zh",
