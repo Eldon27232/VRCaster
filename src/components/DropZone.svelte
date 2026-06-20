@@ -49,11 +49,8 @@
     };
   }
 
-  async function addPaths(paths: string[]) {
-    const videos = paths.filter(isVideo);
-    if (!videos.length) return;
-    busy = true;
-    errorMsg = "";
+  // 分析单批视频并加入队列。
+  async function analyzeAndAdd(videos: string[]) {
     for (const path of videos) {
       try {
         const media = await api.analyzeMedia(path);
@@ -72,6 +69,25 @@
         errorMsg = `${path.split(/[\\/]/).pop()}：${e}`;
       }
     }
+  }
+
+  // 处理一批路径：视频文件直接加；非视频路径尝试当作文件夹展开。
+  async function addPaths(paths: string[]) {
+    busy = true;
+    errorMsg = "";
+    const videos: string[] = [];
+    for (const path of paths) {
+      if (isVideo(path)) {
+        videos.push(path);
+      } else {
+        try {
+          videos.push(...(await api.listVideosInDir(path)));
+        } catch {
+          // 非目录或读取失败，忽略该路径
+        }
+      }
+    }
+    await analyzeAndAdd(videos);
     busy = false;
   }
 
@@ -84,6 +100,23 @@
     if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
     await addPaths(paths);
+  }
+
+  // 选择文件夹，批量导入其中的视频。
+  async function pickFolder() {
+    if (busy) return;
+    const dir = await open({ directory: true });
+    if (!dir || Array.isArray(dir)) return;
+    busy = true;
+    errorMsg = "";
+    try {
+      const videos = await api.listVideosInDir(dir);
+      if (!videos.length) errorMsg = "该文件夹内未找到视频文件";
+      await analyzeAndAdd(videos);
+    } catch (e) {
+      errorMsg = `${e}`;
+    }
+    busy = false;
   }
 
   // Tauri webview 文件拖放事件
@@ -137,6 +170,15 @@
   {#if errorMsg}
     <div class="err">{errorMsg}</div>
   {/if}
+</button>
+
+<button
+  type="button"
+  class="folder-btn"
+  on:click={pickFolder}
+  disabled={busy}
+>
+  📁 选择文件夹批量导入
 </button>
 
 <style>
@@ -197,5 +239,29 @@
     margin-top: 0.4rem;
     font-size: 0.8rem;
     color: var(--danger);
+  }
+  .folder-btn {
+    display: block;
+    margin: 0.6rem auto 0;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .folder-btn:hover:not(:disabled) {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--accent-cyan);
+  }
+  .folder-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 </style>

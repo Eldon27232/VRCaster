@@ -3,15 +3,28 @@
   import type { UnlistenFn } from "@tauri-apps/api/event";
   import MainView from "./views/MainView.svelte";
   import SettingsView from "./views/SettingsView.svelte";
+  import HistoryView from "./components/HistoryView.svelte";
   import Segmented from "./components/Segmented.svelte";
   import { api, events } from "./lib/api";
-  import { settings, queueMode, activeProfileId, updateItem, setProgress } from "./lib/stores";
+  import { settings, queueMode, activeProfileId, updateItem, setProgress, pushLog } from "./lib/stores";
   import { lang, setLang, tr } from "./lib/i18n";
   import type { Lang } from "./lib/i18n";
-  import type { ProgressEvent } from "./lib/types";
+  import type { ProgressEvent, LogEvent } from "./lib/types";
 
-  type View = "main" | "settings";
+  type View = "main" | "settings" | "history";
   let view: View = "main";
+
+  // 完成通知（Web Notification），按 itemId 去重避免重复弹。
+  const notified = new Set<string>();
+  function notify(body: string) {
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        new Notification("VRCaster", { body });
+      }
+    } catch {
+      /* 忽略通知失败 */
+    }
+  }
 
   const langOptions = [
     { value: "zh", label: "中文" },
@@ -36,16 +49,30 @@
         uploadProgress: e.percent,
         status: e.percent >= 100 ? "done" : "uploading",
       });
+      if (e.percent >= 100 && e.itemId !== "__sample__" && !notified.has(e.itemId)) {
+        notified.add(e.itemId);
+        notify("上传完成，播放链接已就绪");
+      }
     }
   }
 
   let unlistenProgress: UnlistenFn | null = null;
+  let unlistenLog: UnlistenFn | null = null;
 
   onMount(async () => {
     try {
       unlistenProgress = await events.onProgress(applyProgress);
+      unlistenLog = await events.onLog((e: LogEvent) => pushLog(e));
     } catch {
       // 非 Tauri 环境忽略
+    }
+    // 请求通知权限（用于完成提醒）。
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        await Notification.requestPermission();
+      }
+    } catch {
+      /* 忽略权限请求失败 */
     }
     try {
       const s = await api.getSettings();
@@ -60,6 +87,7 @@
 
   onDestroy(() => {
     if (unlistenProgress) unlistenProgress();
+    if (unlistenLog) unlistenLog();
   });
 </script>
 
@@ -80,6 +108,20 @@
       <button
         type="button"
         class="gear"
+        class:active={view === "history"}
+        title="历史记录"
+        aria-label="历史记录"
+        on:click={() => (view = view === "history" ? "main" : "history")}
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v5h5" />
+          <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="gear"
         class:active={view === "settings"}
         title={tr("settings")}
         aria-label={tr("settings")}
@@ -96,6 +138,8 @@
   <main class="body">
     {#if view === "settings"}
       <SettingsView />
+    {:else if view === "history"}
+      <HistoryView />
     {:else}
       <MainView />
     {/if}

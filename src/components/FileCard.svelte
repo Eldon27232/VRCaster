@@ -1,12 +1,21 @@
 <script lang="ts">
   import { open as openShell } from "@tauri-apps/plugin-shell";
+  import { get } from "svelte/store";
   import { t } from "../lib/i18n";
   import { api } from "../lib/api";
-  import { updateItem, removeItem, moveItem, progressMap } from "../lib/stores";
+  import {
+    updateItem,
+    removeItem,
+    moveItem,
+    progressMap,
+    profiles,
+    activeProfileId,
+  } from "../lib/stores";
   import type { QueueItem, EncodeParams } from "../lib/types";
   import ParamControls from "./ParamControls.svelte";
   import SamplePanel from "./SamplePanel.svelte";
   import ProgressDetail from "./ProgressDetail.svelte";
+  import PresetBar from "./PresetBar.svelte";
 
   export let item: QueueItem;
 
@@ -124,6 +133,32 @@
               : "等待中";
 
   $: busy = item.status === "encoding" || item.status === "uploading";
+
+  // 完成时记入历史（去重）
+  let historyAdded = false;
+  $: if (item.status === "done" && item.resultUrl && !historyAdded) {
+    historyAdded = true;
+    void recordHistory();
+  }
+  async function recordHistory() {
+    const pname =
+      get(profiles).find((p) => p.id === get(activeProfileId))?.name ?? "";
+    const prog = get(progressMap)[item.id];
+    const sizeBytes = prog?.totalSize ?? prog?.curSize ?? 0;
+    try {
+      await api.addHistory({
+        id: item.id,
+        fileName: fileName(item.media.path),
+        outputPath: "",
+        url: item.resultUrl ?? "",
+        sizeBytes,
+        createdAt: new Date().toLocaleString(),
+        profileName: pname,
+      });
+    } catch {
+      /* 历史写入失败不影响主流程 */
+    }
+  }
 </script>
 
 <div class="card" class:error={item.status === "error"}>
@@ -168,8 +203,9 @@
     <span class="tag">{fmtSize(item.media.sizeBytes)}</span>
   </div>
 
-  <!-- 参数控件 -->
-  <div class="section">
+  <!-- 参数控件 + 预设 -->
+  <div class="section param-section">
+    <PresetBar params={item.params} on:apply={onApplyParams} />
     <ParamControls
       media={item.media}
       params={item.params}
@@ -363,6 +399,11 @@
   .section {
     border-top: 1px solid var(--border);
     padding-top: 16px;
+  }
+  .param-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
   .result {

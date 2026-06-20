@@ -1,12 +1,25 @@
 <script lang="ts">
   import { get } from "svelte/store";
+  import { confirm } from "@tauri-apps/plugin-dialog";
   import DropZone from "../components/DropZone.svelte";
   import Segmented from "../components/Segmented.svelte";
   import FileCard from "../components/FileCard.svelte";
+  import LogPanel from "../components/LogPanel.svelte";
   import { queue, queueMode, activeProfileId } from "../lib/stores";
   import { api } from "../lib/api";
   import { tr } from "../lib/i18n";
   import type { QueueMode } from "../lib/types";
+
+  // 队列总进度
+  $: total = $queue.length;
+  $: doneCount = $queue.filter((it) => it.status === "done").length;
+  $: activeCount = $queue.filter(
+    (it) => it.status === "encoding" || it.status === "uploading",
+  ).length;
+
+  function fmtGB(bytes: number): string {
+    return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  }
 
   const modeOptions = [
     { value: "pipeline", label: tr("modePipeline") },
@@ -30,10 +43,33 @@
   async function start() {
     const items = get(queue);
     if (!items.length || running) return;
+    const profileId = get(activeProfileId) ?? "";
+
+    // 上传前空间预检（仅在已选服务器时）
+    if (profileId) {
+      try {
+        const space = await api.checkRemoteSpace(profileId);
+        const estBytes = items.reduce((sum, it) => {
+          const rm = it.params.rateMode;
+          if (rm.kind === "targetSize") return sum + rm.gb * 1024 ** 3;
+          return sum + it.media.sizeBytes * 0.3; // 质量档无法精确预估，保守按源 30%
+        }, 0);
+        if (estBytes > space.freeBytes) {
+          const ok = await confirm(
+            `预计成品约需 ${fmtGB(estBytes)}，远程仅剩 ${fmtGB(space.freeBytes)}。仍要继续吗？`,
+            { title: "远程空间可能不足", kind: "warning" },
+          );
+          if (!ok) return;
+        }
+      } catch {
+        // 空间预检失败不阻断（服务器可能未配置），继续
+      }
+    }
+
     running = true;
     runError = "";
     try {
-      await api.runQueue(items, get(queueMode), get(activeProfileId) ?? "");
+      await api.runQueue(items, get(queueMode), profileId);
     } catch (e) {
       runError = `${e}`;
     } finally {
@@ -47,6 +83,20 @@
     <DropZone />
   </section>
 
+  {#if total > 0}
+    <div class="overview">
+      <span class="ov-text"
+        >完成 {doneCount} / {total}{#if activeCount > 0} · 进行中 {activeCount}{/if}</span
+      >
+      <div class="ov-track">
+        <div
+          class="ov-fill"
+          style="width: {total ? (doneCount / total) * 100 : 0}%"
+        ></div>
+      </div>
+    </div>
+  {/if}
+
   <section class="list">
     {#if $queue.length === 0}
       <div class="empty">
@@ -59,6 +109,10 @@
         <FileCard item={it} />
       {/each}
     {/if}
+  </section>
+
+  <section class="log">
+    <LogPanel />
   </section>
 
   <footer class="toolbar">
@@ -92,10 +146,35 @@
     margin: 0 auto;
     padding: 1.4rem 1.6rem 6.5rem;
   }
+  .overview {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .ov-text {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .ov-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .ov-fill {
+    height: 100%;
+    background: var(--accent-grad);
+    transition: width 0.3s ease;
+  }
   .list {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+  }
+  .log {
+    margin-top: 0.2rem;
   }
   .empty {
     display: flex;
