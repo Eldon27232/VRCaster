@@ -12,3 +12,6 @@ Thumbs.db
 
 # 本地配置（含敏感信息的不入库；凭据走系统密钥环）
 *.local
+
+# 图标源（由 tauri icon 生成全套，无需入库）
+icon-source.png

@@ -1,0 +1,9 @@
+# 统一换行处理，消除 Windows 上的 LF/CRLF 警告
+* text=auto eol=lf
+
+# 二进制资源不做换行转换
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.mp4 binary
